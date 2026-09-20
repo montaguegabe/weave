@@ -1,0 +1,757 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Weave — AST-native version control that merges code by structure, not text. Parallel coding agents, no merge conflicts.">
+</head>
+<body>
+<title>Weave — Version Control That Merges Meaning, Not Text</title>
+
+<style>
+  :root {
+    /* light / indigo "desktop" world — Weave's signature dyed-thread periwinkle */
+    --ground:      #a6a1ef;
+    --ground-2:    #211d3a5e;
+    --on-ground:   #201c34;   /* headlines, eyebrows, body sitting on the desktop */
+    --win-fill:    #ffffff;
+    --win-fill-alt:#c8c5df;
+    --win-ink:     #201c34;   /* window chrome, borders, in-window text */
+    --win-bar-txt: #f3f1ff;   /* text on the dark title bar */
+    --dot:         #201c34;   /* dither dots on the desktop */
+    --hair:        #201c34b0;
+    --btn-bg:      #201c34;
+    --btn-txt:     #f0eeff;
+
+    --maxw: 1240px;
+    --gutter: clamp(20px, 5vw, 72px);
+
+    --mono: "SF Mono", "SFMono-Regular", ui-monospace, "Menlo", "Monaco", "Consolas", monospace;
+    --sans: "Helvetica Neue", "Helvetica", "Arial", "Liberation Sans", system-ui, sans-serif;
+
+    /* fluid type scale */
+    --fs-mega:  clamp(3.4rem, 12vw, 10rem);
+    --fs-h1:    clamp(2.4rem, 7vw, 6rem);
+    --fs-h2:    clamp(1.9rem, 4.6vw, 3.6rem);
+    --fs-lead:  clamp(1.15rem, 1.7vw, 1.55rem);
+    --fs-body:  clamp(1rem, 1.25vw, 1.18rem);
+    --fs-mono:  clamp(0.68rem, 0.85vw, 0.8rem);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ground:      #191630;
+      --ground-2:    #e7e3ff1a;
+      --on-ground:   #e9e5ff;
+      --win-fill:    #ece9fb;
+      --win-fill-alt:#aaa4c8;
+      --win-ink:     #14112a;
+      --win-bar-txt: #ece9fb;
+      --dot:         #e9e5ff;
+      --hair:        #e9e5ff8a;
+      --btn-bg:      #ece9fb;
+      --btn-txt:     #14112a;
+    }
+  }
+  /* explicit toggle wins in both directions */
+  :root[data-theme="light"] {
+    --ground:#a6a1ef; --ground-2:#211d3a5e; --on-ground:#201c34; --win-fill:#ffffff;
+    --win-fill-alt:#c8c5df; --win-ink:#201c34; --win-bar-txt:#f3f1ff; --dot:#201c34;
+    --hair:#201c34b0; --btn-bg:#201c34; --btn-txt:#f0eeff;
+  }
+  :root[data-theme="dark"] {
+    --ground:#191630; --ground-2:#e7e3ff1a; --on-ground:#e9e5ff; --win-fill:#ece9fb;
+    --win-fill-alt:#aaa4c8; --win-ink:#14112a; --win-bar-txt:#ece9fb; --dot:#e9e5ff;
+    --hair:#e9e5ff8a; --btn-bg:#ece9fb; --btn-txt:#14112a;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--on-ground);
+    font-family: var(--sans);
+    font-size: var(--fs-body);
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+
+  .wrap { max-width: var(--maxw); margin-inline: auto; padding-inline: var(--gutter); }
+
+  /* ---------- shared type ---------- */
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: var(--fs-mono);
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    margin: 0 0 1.4rem;
+    opacity: 0.9;
+  }
+  .mega {
+    font-family: var(--sans);
+    font-weight: 800;
+    font-size: var(--fs-mega);
+    line-height: 0.9;
+    letter-spacing: -0.03em;
+    text-wrap: balance;
+    margin: 0;
+  }
+  .h1 {
+    font-family: var(--sans);
+    font-weight: 800;
+    font-size: var(--fs-h1);
+    line-height: 0.95;
+    letter-spacing: -0.025em;
+    text-wrap: balance;
+    margin: 0;
+  }
+  .h2 {
+    font-family: var(--sans);
+    font-weight: 800;
+    font-size: var(--fs-h2);
+    line-height: 1.0;
+    letter-spacing: -0.02em;
+    text-wrap: balance;
+    margin: 0;
+  }
+  .lead { font-size: var(--fs-lead); line-height: 1.4; max-width: 40ch; }
+  p { max-width: 62ch; }
+  a { color: inherit; }
+
+  /* ---------- registration-mark framed section ---------- */
+  .framed { position: relative; padding-block: clamp(64px, 9vw, 130px); }
+  .framed::before, .framed::after {
+    content: ""; position: absolute; width: 26px; height: 26px;
+    border: 1.5px solid var(--on-ground); pointer-events: none;
+  }
+  .framed::before { top: 34px; left: var(--gutter); border-right: 0; border-bottom: 0; }
+  .framed::after  { bottom: 34px; right: var(--gutter); border-left: 0; border-top: 0; }
+
+  /* ---------- nav ---------- */
+  header.nav {
+    position: sticky; top: 0; z-index: 50;
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 1rem;
+    padding: 14px var(--gutter);
+    background: color-mix(in srgb, var(--ground) 86%, transparent);
+    backdrop-filter: blur(8px);
+    border-bottom: 1.5px solid var(--hair);
+  }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 1.25rem; letter-spacing: -0.02em; }
+  .brand svg { display: block; }
+  .nav-links { display: flex; align-items: center; gap: clamp(12px, 2vw, 30px); font-family: var(--mono); font-size: var(--fs-mono); text-transform: uppercase; letter-spacing: 0.1em; }
+  .nav-links a { text-decoration: none; opacity: 0.85; }
+  .nav-links a:hover { opacity: 1; text-decoration: underline; text-underline-offset: 4px; }
+  .nav-links .hide-sm { }
+  @media (max-width: 720px) { .nav-links .hide-sm { display: none; } }
+
+  /* ---------- buttons ---------- */
+  .btn {
+    font-family: var(--mono); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.08em;
+    text-decoration: none; display: inline-flex; align-items: center; gap: 8px;
+    padding: 13px 20px; border: 1.5px solid var(--on-ground);
+    background: var(--btn-bg); color: var(--btn-txt);
+    transition: transform 0.12s ease, box-shadow 0.12s ease;
+  }
+  .btn.ghost { background: transparent; color: var(--on-ground); }
+  .btn:hover { transform: translate(-2px,-2px); box-shadow: 4px 4px 0 var(--on-ground); }
+  .btn.ghost:hover { box-shadow: 4px 4px 0 var(--on-ground); }
+
+  /* ---------- retro window ---------- */
+  .win { border: 1.5px solid var(--win-ink); background: var(--win-fill); color: var(--win-ink); box-shadow: 5px 5px 0 rgba(0,0,0,0.18); }
+  .win__bar {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--win-ink); color: var(--win-bar-txt);
+    font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.06em;
+    padding: 5px 9px;
+  }
+  .win__dots { display: inline-flex; gap: 4px; }
+  .win__dots i { width: 8px; height: 8px; border: 1.2px solid var(--win-bar-txt); display: block; }
+  .win__title { text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .win__body { padding: 16px 18px; font-family: var(--mono); font-size: 0.82rem; line-height: 1.55; }
+  .win__body p { max-width: none; }
+
+  /* dithered desktop container */
+  .desktop {
+    position: relative;
+    border: 1.5px solid var(--on-ground);
+    background:
+      radial-gradient(var(--dot) 0.9px, transparent 1.1px);
+    background-size: 7px 7px;
+    background-color: transparent;
+    padding: clamp(18px, 3vw, 40px);
+    min-height: 340px;
+  }
+  .desktop .win { position: relative; }
+
+  /* ---------- HERO ---------- */
+  .hero { padding-top: clamp(40px, 6vw, 72px); }
+  .hero-grid { display: grid; grid-template-columns: 1.05fr 0.95fr; gap: clamp(28px, 4vw, 64px); align-items: center; }
+  @media (max-width: 900px) { .hero-grid { grid-template-columns: 1fr; } }
+  .hero-cta { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 30px; }
+
+  .hero-desktop { display: grid; gap: 14px; }
+  .wt-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  @media (max-width: 480px){ .wt-row { grid-template-columns: 1fr; } }
+  .tag-add { color: #1a7f4b; }
+  .tag-del { color: #b23b3b; }
+  .node { display: block; }
+  .indent { padding-left: 1.4em; }
+
+  /* merge connector caption */
+  .merge-note { font-family: var(--mono); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.1em; text-align: center; opacity: 0.75; }
+
+  /* ---------- two-column explainer ---------- */
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: clamp(28px, 5vw, 80px); margin-top: clamp(40px, 6vw, 80px); }
+  @media (max-width: 760px) { .cols { grid-template-columns: 1fr; gap: 40px; } }
+  .col { border-top: 1.5px solid var(--on-ground); padding-top: 18px; }
+  .col .eyebrow { margin-bottom: 1rem; }
+  .col p { font-size: var(--fs-body); }
+
+  /* ---------- how it works ---------- */
+  .steps { display: grid; grid-template-columns: repeat(2, 1fr); gap: 22px; margin-top: clamp(36px, 5vw, 64px); }
+  @media (max-width: 760px) { .steps { grid-template-columns: 1fr; } }
+  .step-k { font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.1em; opacity: 0.7; }
+  .step h3 { font-size: 1.25rem; margin: 4px 0 8px; letter-spacing: -0.01em; }
+  .step p { font-size: 1rem; max-width: 48ch; }
+
+  /* ---------- interactive demo ---------- */
+  .demo-head { display:flex; flex-wrap:wrap; align-items:flex-end; justify-content:space-between; gap:16px; margin-bottom: 26px; }
+  .demo-stage { display:grid; grid-template-columns: 1fr 1fr; gap:16px; align-items:start; }
+  @media (max-width:760px){ .demo-stage { grid-template-columns:1fr; } }
+  .demo-main { grid-column:1/-1; }
+  .demo-win .win__body { min-height: 132px; }
+  .op {
+    display:flex; align-items:center; gap:8px;
+    padding:3px 0; opacity:0; transform: translateY(6px);
+    transition: opacity .35s ease, transform .35s ease, color .3s ease;
+  }
+  .op.show { opacity:1; transform:none; }
+  .op .badge {
+    font-size:0.6rem; letter-spacing:0.06em; padding:1px 5px; border:1.2px solid currentColor;
+    text-transform:uppercase; flex:none;
+  }
+  .op.ok       { color:#1a7f4b; }
+  .op.conflict { color:#c0392b; }
+  .op.resolved { color:#6b4bd8; }
+  :root[data-theme="dark"] .op.ok       { color:#5fcf94; }
+  :root[data-theme="dark"] .op.conflict { color:#ff7b6b; }
+  :root[data-theme="dark"] .op.resolved { color:#b3a0ff; }
+  @media (prefers-color-scheme: dark) {
+    .op.ok       { color:#5fcf94; }
+    .op.conflict { color:#ff7b6b; }
+    .op.resolved { color:#b3a0ff; }
+  }
+  .demo-status {
+    font-family:var(--mono); font-size:0.74rem; letter-spacing:0.06em;
+    border-top:1.5px solid var(--hair); margin-top:16px; padding-top:12px;
+    min-height:2.4em;
+  }
+  .demo-status b { font-weight:700; }
+  .demo-controls { display:flex; gap:10px; align-items:center; }
+  .demo-progress { display:flex; gap:5px; }
+  .demo-progress i { width:26px; height:5px; background:var(--hair); display:block; }
+  .demo-progress i.on { background:var(--on-ground); }
+
+  /* ---------- big stat ---------- */
+  .stat { text-align: left; }
+  .stat .mega { margin-bottom: 10px; }
+  .stat sub, .stat .foot { font-family: var(--mono); font-size: var(--fs-mono); text-transform: uppercase; letter-spacing: 0.1em; display: block; }
+  .strike { display: inline-block; }
+
+  /* ---------- comparison ---------- */
+  .cmp-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 22px; margin-top: clamp(36px, 5vw, 60px); }
+  @media (max-width: 820px) { .cmp-grid { grid-template-columns: 1fr; } }
+  .cmp .win__body { font-family: var(--sans); font-size: 0.98rem; }
+  .cmp dl { margin: 0; display: grid; gap: 14px; }
+  .cmp dt { font-family: var(--mono); font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.12em; opacity: 0.65; margin-bottom: 3px; }
+  .cmp dd { margin: 0; max-width: none; }
+  .cmp .same dt::before { content: "≈ "; }
+  .cmp .diff dt::before { content: "◆ "; }
+  .cmp .diff dd { font-weight: 500; }
+  hr.rule { border: 0; border-top: 1.5px solid var(--win-ink); opacity: 0.35; margin: 14px 0; }
+
+  /* ---------- faq ---------- */
+  .faq { max-width: 900px; margin-top: clamp(30px,4vw,50px); }
+  details { border-top: 1.5px solid var(--on-ground); padding: 18px 0; }
+  details:last-child { border-bottom: 1.5px solid var(--on-ground); }
+  summary { cursor: pointer; list-style: none; display: flex; justify-content: space-between; align-items: center; gap: 20px; font-weight: 800; font-size: clamp(1.05rem,2vw,1.4rem); letter-spacing: -0.01em; }
+  summary::-webkit-details-marker { display: none; }
+  summary .plus { font-family: var(--mono); font-weight: 400; transition: transform 0.2s ease; }
+  details[open] summary .plus { transform: rotate(45deg); }
+  details p { margin: 14px 0 2px; }
+
+  /* ---------- footer ---------- */
+  footer { padding: clamp(48px,7vw,90px) 0 40px; }
+  .foot-grid { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 28px; align-items: flex-start; }
+  .foot-links { display: grid; gap: 8px; font-family: var(--mono); font-size: var(--fs-mono); text-transform: uppercase; letter-spacing: 0.1em; }
+  .foot-links a { text-decoration: none; opacity: 0.8; }
+  .foot-links a:hover { opacity: 1; text-decoration: underline; text-underline-offset: 4px; }
+  .colophon { font-family: var(--mono); font-size: var(--fs-mono); opacity: 0.7; max-width: 40ch; line-height: 1.7; }
+
+  .theme-toggle {
+    font-family: var(--mono); font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.1em;
+    background: transparent; color: inherit; border: 1.5px solid var(--hair); padding: 8px 10px; cursor: pointer;
+  }
+  .theme-toggle:hover { border-color: var(--on-ground); }
+
+  :focus-visible { outline: 3px solid var(--on-ground); outline-offset: 3px; }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; }
+  }
+</style>
+
+<header class="nav">
+  <div class="brand">
+    <svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true">
+      <g fill="none" stroke="currentColor" stroke-width="2.2">
+        <path d="M2 6 C 9 6, 9 20, 16 20 S 23 6, 24 6" />
+        <path d="M2 13 C 9 13, 9 20, 16 20" opacity="0.55" />
+        <path d="M10 6 C 17 6, 17 20, 24 20" opacity="0.55" />
+      </g>
+    </svg>
+    Weave
+  </div>
+  <nav class="nav-links">
+    <a href="#thesis" class="hide-sm">Why</a>
+    <a href="#how" class="hide-sm">How it works</a>
+    <a href="#compare">Comparison</a>
+    <a href="#faq" class="hide-sm">FAQ</a>
+    <a href="https://github.com" target="_blank" rel="noopener">GitHub ↗</a>
+    <button class="theme-toggle" id="themeToggle" aria-label="Toggle color theme">◑ Theme</button>
+  </nav>
+</header>
+
+<!-- ===================== HERO ===================== -->
+<section class="framed hero">
+  <div class="wrap hero-grid">
+    <div>
+      <p class="eyebrow">AST-native version control · v0.01</p>
+      <h1 class="h1">Ten agents.<br>One codebase.<br>No merge conflicts.</h1>
+      <p class="lead" style="margin-top:24px;">
+        Weave stores your code as a <strong>syntax tree in a database</strong> — not as lines in
+        files. Commits, branches, and merges happen on the tree itself, so the parallel edits
+        git would call a conflict simply&nbsp;don't.
+      </p>
+      <div class="hero-cta">
+        <a class="btn" href="#how">Read how it works</a>
+        <a class="btn ghost" href="https://github.com" target="_blank" rel="noopener">View source ↗</a>
+      </div>
+    </div>
+
+    <div class="hero-desktop" aria-hidden="true">
+      <div class="wt-row">
+        <div class="win">
+          <div class="win__bar"><span class="win__dots"><i></i></span><span class="win__title">worktree · feature-1</span></div>
+          <div class="win__body">
+            <span class="node">fn total_price()</span>
+            <span class="node indent tag-add">+ qty: int</span>
+            <span class="node indent">price × qty</span>
+          </div>
+        </div>
+        <div class="win">
+          <div class="win__bar"><span class="win__dots"><i></i></span><span class="win__title">worktree · feature-2</span></div>
+          <div class="win__body">
+            <span class="node">fn total_price()</span>
+            <span class="node indent tag-add">+ discount</span>
+            <span class="node indent">price − off</span>
+          </div>
+        </div>
+      </div>
+      <p class="merge-note">▼ &nbsp; both touch total_price &nbsp; ▼</p>
+      <div class="win">
+        <div class="win__bar">
+          <span class="win__dots"><i></i><i></i></span>
+          <span class="win__title">main — merge complete</span>
+        </div>
+        <div class="win__body">
+          <span class="node">fn total_price(qty, discount):</span>
+          <span class="node indent">subtotal = price × qty</span>
+          <span class="node indent">return subtotal − discount</span>
+          <span class="node" style="opacity:.6">// 3 ops auto-merged · 1 node resolved by LLM</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== THESIS ===================== -->
+<section class="framed" id="thesis">
+  <div class="wrap">
+    <p class="eyebrow">The core idea</p>
+    <h2 class="mega">Git merges<br>text. Weave<br>merges meaning.</h2>
+
+    <div class="cols">
+      <div class="col">
+        <p class="eyebrow">Why git fights you</p>
+        <p>
+          Git sees a source file as a stack of <strong>lines of text</strong>. When two branches
+          change the same file — even in completely different functions — git compares line ranges
+          and raises a conflict the moment those ranges touch or sit adjacent. It has no idea what
+          the code <em>means</em>; it only knows lines <code>40–52</code> moved on both sides.
+        </p>
+        <p>
+          Point a swarm of coding agents at one repo and this becomes the bottleneck. Agents
+          generate large, overlapping edits fast, and you spend more time refereeing rebases and
+          untangling conflict markers than shipping features.
+        </p>
+      </div>
+      <div class="col">
+        <p class="eyebrow">What Weave does instead</p>
+        <p>
+          Weave never stores lines. It parses your code into an <strong>abstract syntax tree</strong>
+          and keeps it in SQLite, where every node has a stable id. A change isn't a text diff —
+          it's a <strong>structural operation</strong> on a node: <em>replace this expression,
+          insert this function, delete this branch.</em>
+        </p>
+        <p>
+          Two edits only conflict if they touch the <strong>same node</strong>. Different functions
+          are different nodes, so they merge automatically — no overlap math, no whitespace wars.
+          A real conflict shrinks from &ldquo;this whole file&rdquo; to &ldquo;this one
+          expression.&rdquo;
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== HOW IT WORKS ===================== -->
+<section class="framed" id="how">
+  <div class="wrap">
+    <p class="eyebrow">How it works</p>
+    <h2 class="h1">Four ideas, one operation log.</h2>
+    <p class="lead" style="margin-top:20px;">
+      Everything in Weave is an append-only log of structural ops. Any version of your code is
+      just those ops replayed onto a tree.
+    </p>
+
+    <div class="steps">
+      <div class="win step">
+        <div class="win__bar"><span class="win__dots"><i></i></span><span class="win__title">01 — the store</span></div>
+        <div class="win__body" style="font-family:var(--sans);font-size:1rem;">
+          <span class="step-k">CODE IS A TREE, NOT A FILE</span>
+          <h3>Parsed into nodes, kept in SQLite</h3>
+          <p>Your source is parsed into AST nodes with stable ids and stored in a WAL-mode
+          database. Nothing lives on disk as text — even <em>running</em> the program renders the
+          tree in memory.</p>
+        </div>
+      </div>
+      <div class="win step">
+        <div class="win__bar"><span class="win__dots"><i></i></span><span class="win__title">02 — a commit</span></div>
+        <div class="win__body" style="font-family:var(--sans);font-size:1rem;">
+          <span class="step-k">EVERY CHANGE IS AN OP</span>
+          <h3>Revisions are transactions of ops</h3>
+          <p>A commit is a set of structural operations —
+          <code>replace</code>, <code>insert_after</code>, <code>append_child</code>,
+          <code>delete</code> — each targeting a node id. State is materialized by replaying the
+          op chain.</p>
+        </div>
+      </div>
+      <div class="win step">
+        <div class="win__bar"><span class="win__dots"><i></i></span><span class="win__title">03 — a branch</span></div>
+        <div class="win__body" style="font-family:var(--sans);font-size:1rem;">
+          <span class="step-k">WORKTREES ARE BRANCH HEADS</span>
+          <h3>Fork main, work in isolation</h3>
+          <p>Each agent gets its own worktree forked from <code>main</code>. It reads, edits, and
+          runs code entirely inside the database — no checkout, no working directory to dirty.</p>
+        </div>
+      </div>
+      <div class="win step">
+        <div class="win__bar"><span class="win__dots"><i></i></span><span class="win__title">04 — a merge</span></div>
+        <div class="win__body" style="font-family:var(--sans);font-size:1rem;">
+          <span class="step-k">MERGE = REPLAY OPS ONTO MAIN</span>
+          <h3>Different nodes auto-merge</h3>
+          <p>Ops touching nodes untouched on <code>main</code> replay cleanly. Only a same-node
+          collision returns a conflict — a tiny <code>base/main/worktree</code> report scoped to
+          one node, small enough to hand to an LLM that writes code combining both intents.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== LIVE DEMO ===================== -->
+<section class="framed" id="demo">
+  <div class="wrap">
+    <div class="demo-head">
+      <div>
+        <p class="eyebrow">Watch a merge happen</p>
+        <h2 class="h1">Two agents. One function.<br>Zero manual conflict.</h2>
+      </div>
+      <div class="demo-controls">
+        <div class="demo-progress" aria-hidden="true">
+          <i id="p0"></i><i id="p1"></i><i id="p2"></i><i id="p3"></i>
+        </div>
+        <button class="btn" id="demoRun">▶ Run merge</button>
+      </div>
+    </div>
+
+    <div class="demo-stage">
+      <div class="win demo-win">
+        <div class="win__bar"><span class="win__dots"><i></i></span><span class="win__title">worktree · feature-1 (quantity)</span></div>
+        <div class="win__body">
+          <div class="op" data-op="a1"><span class="badge">op</span> append_child → <b>qty</b> param</div>
+          <div class="op" data-op="a2"><span class="badge">op</span> replace node #payment.tax</div>
+          <div class="op" data-op="a3"><span class="badge">op</span> replace node #total_price.body</div>
+        </div>
+      </div>
+      <div class="win demo-win">
+        <div class="win__bar"><span class="win__dots"><i></i></span><span class="win__title">worktree · feature-2 (discount)</span></div>
+        <div class="win__body">
+          <div class="op" data-op="b1"><span class="badge">op</span> append_child → <b>discount</b> param</div>
+          <div class="op" data-op="b2"><span class="badge">op</span> insert_after node #cart.summary</div>
+          <div class="op" data-op="b3"><span class="badge">op</span> replace node #total_price.body</div>
+        </div>
+      </div>
+
+      <div class="win demo-win demo-main">
+        <div class="win__bar"><span class="win__dots"><i></i><i></i></span><span class="win__title">main — merge_worktree</span></div>
+        <div class="win__body">
+          <div class="op" data-op="m1"><span class="badge">auto</span> qty &amp; discount params → different nodes, replayed</div>
+          <div class="op" data-op="m2"><span class="badge">auto</span> #payment.tax, #cart.summary → no overlap, replayed</div>
+          <div class="op" data-op="m3"><span class="badge">conflict</span> #total_price.body → same node, both sides changed</div>
+          <div class="op" data-op="m4"><span class="badge">llm</span> resolve_merge → <b>return price*qty - discount</b></div>
+        </div>
+        <div class="demo-status" id="demoStatus">Press <b>Run merge</b> to replay two overlapping worktrees onto main.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== STAT ===================== -->
+<section class="framed stat">
+  <div class="wrap">
+    <p class="eyebrow">The payoff</p>
+    <h2 class="mega"><span class="strike">The whole file</span> →&nbsp;one&nbsp;node.</h2>
+    <p class="foot" style="margin-top:22px;max-width:52ch;line-height:1.7;">
+      That's the size of a Weave conflict. Instead of a human rebasing an entire file, the merge
+      surface is a single expression — cheap enough to resolve automatically. Most parallel edits
+      never conflict at all.
+    </p>
+  </div>
+</section>
+
+<!-- ===================== COMPARISON ===================== -->
+<section class="framed" id="compare">
+  <div class="wrap">
+    <p class="eyebrow">Where Weave fits</p>
+    <h2 class="h1">Familiar enough to adopt.<br>Different where it counts.</h2>
+    <p class="lead" style="margin-top:20px;">
+      Weave isn't trying to reinvent your mental model — you still branch, commit, and merge.
+      Here's exactly how it lines up against the tools you already know.
+    </p>
+
+    <div class="cmp-grid">
+
+      <div class="win cmp">
+        <div class="win__bar"><span class="win__dots"><i></i></span><span class="win__title">Weave vs. Git</span></div>
+        <div class="win__body">
+          <dl>
+            <div class="same"><dt>Shared DNA</dt><dd>Commits, branches, merges, a reviewable history, and an explicit merge step you control. The workflow feels like git.</dd></div>
+            <hr class="rule">
+            <div class="diff"><dt>What Weave changes</dt><dd>Git diffs and merges <strong>lines of text</strong>; Weave diffs and merges <strong>AST nodes</strong>. No line-level or adjacent-line conflicts, and your working copy is a database, not a checkout you have to keep clean.</dd></div>
+          </dl>
+        </div>
+      </div>
+
+      <div class="win cmp">
+        <div class="win__bar"><span class="win__dots"><i></i></span><span class="win__title">Weave vs. GitHub / Pull Requests</span></div>
+        <div class="win__body">
+          <dl>
+            <div class="same"><dt>Shared DNA</dt><dd>Isolate work, propose a change set, and review before it lands on the main line.</dd></div>
+            <hr class="rule">
+            <div class="diff"><dt>What Weave changes</dt><dd>A PR still resolves at the <strong>textual diff</strong>. Weave's unit of review is a structural op set; conflicts arrive <strong>pre-scoped to nodes</strong> and can be auto-resolved by an LLM instead of a human rebasing a branch.</dd></div>
+          </dl>
+        </div>
+      </div>
+
+      <div class="win cmp">
+        <div class="win__bar"><span class="win__dots"><i></i></span><span class="win__title">Weave vs. Unison / content-addressed code</span></div>
+        <div class="win__body">
+          <dl>
+            <div class="same"><dt>Shared DNA</dt><dd>The conviction that code should be stored as <strong>structured, identity-bearing definitions</strong> — not as files of text.</dd></div>
+            <hr class="rule">
+            <div class="diff"><dt>What Weave changes</dt><dd>Unison is a whole <strong>language</strong> you adopt. Weave is a <strong>VCS layer</strong> you point at ordinary code, with git-style worktrees, commits, and merges — plus an MCP interface built for agents.</dd></div>
+          </dl>
+        </div>
+      </div>
+
+      <div class="win cmp">
+        <div class="win__bar"><span class="win__dots"><i></i></span><span class="win__title">Weave vs. CRDT live editors (Docs, multiplayer IDEs)</span></div>
+        <div class="win__body">
+          <dl>
+            <div class="same"><dt>Shared DNA</dt><dd>Many writers on one document, combined by <strong>operations</strong> rather than manual conflict resolution.</dd></div>
+            <hr class="rule">
+            <div class="diff"><dt>What Weave changes</dt><dd>Character-level CRDTs converge <em>always</em> — and can silently interleave two edits into broken syntax. Weave's ops are <strong>AST-aware</strong>, so a merge is always valid code; a genuine clash surfaces as an explicit conflict instead of corrupt text.</dd></div>
+          </dl>
+        </div>
+      </div>
+
+      <div class="win cmp" style="grid-column:1/-1;">
+        <div class="win__bar"><span class="win__dots"><i></i></span><span class="win__title">Weave vs. semantic-merge tools (SemanticMerge, difftastic)</span></div>
+        <div class="win__body">
+          <dl style="grid-template-columns:1fr 1fr;display:grid;gap:14px 40px;">
+            <div class="same"><dt>Shared DNA</dt><dd>They parse code into a tree to merge and diff more intelligently than plain line comparison.</dd></div>
+            <div class="diff"><dt>What Weave changes</dt><dd>Those tools bolt structural awareness <em>onto</em> a file- and line-based git. Weave is structural <strong>all the way down</strong> — the tree <em>is</em> the store, so there are no files to reconcile in the first place.</dd></div>
+          </dl>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ===================== FAQ ===================== -->
+<section class="framed" id="faq">
+  <div class="wrap">
+    <p class="eyebrow">Questions</p>
+    <h2 class="h1">The honest FAQ.</h2>
+
+    <div class="faq">
+      <details>
+        <summary>Do I have to give up git? <span class="plus">+</span></summary>
+        <p>Conceptually, no — Weave keeps the branch/commit/merge model you already think in. Under
+        the hood it replaces text storage with a syntax-tree database, so the everyday operations
+        map over directly. It's a different engine, not a different mental model.</p>
+      </details>
+      <details>
+        <summary>What actually happens on a real conflict? <span class="plus">+</span></summary>
+        <p>When two worktrees change the <em>same</em> node, Weave returns a per-node conflict
+        report with the <code>base</code>, <code>main</code>, and <code>worktree</code> versions of
+        just that node. Because the scope is one expression rather than a whole file, it's small
+        enough to resolve automatically — the merge agent writes code that combines both sides'
+        intent via <code>resolve_merge</code>.</p>
+      </details>
+      <details>
+        <summary>How do coding agents plug in? <span class="plus">+</span></summary>
+        <p>Through a dependency-free MCP stdio server exposing the store as tools —
+        <code>create_worktree</code>, <code>read_source</code>, <code>commit</code>,
+        <code>run_program</code>, <code>merge_worktree</code>, <code>resolve_merge</code>, and more.
+        Agents run with filesystem and shell access disabled: the code never exists as a file for
+        them to touch.</p>
+      </details>
+      <details>
+        <summary>Is the code ever written to disk? <span class="plus">+</span></summary>
+        <p>No. The tree lives in SQLite, and even running the program renders the projection
+        in-memory — so &ldquo;run the code&rdquo; never materializes a file. The database is the
+        single source of truth.</p>
+      </details>
+      <details>
+        <summary>What languages does it support? <span class="plus">+</span></summary>
+        <p>The reference implementation demos Python via its AST, but the architecture is
+        language-agnostic: anything with a parser to build the tree and a renderer to project it
+        back to source can ride the same op-log and merge engine.</p>
+      </details>
+      <details>
+        <summary>Is this production-ready? <span class="plus">+</span></summary>
+        <p>Not yet — Weave is v0.01, a working research prototype exploring what version control
+        looks like when the store is a syntax tree. It runs the full loop today: parallel agents,
+        node-level auto-merge, and LLM-resolved conflicts. Treat it as a demo of the idea, not a
+        drop-in for your team repo.</p>
+      </details>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== FOOTER ===================== -->
+<footer class="framed">
+  <div class="wrap">
+    <div class="win" style="max-width:520px;margin-bottom:40px;">
+      <div class="win__bar"><span class="win__dots"><i></i></span><span class="win__title">Weave</span></div>
+      <div class="win__body">
+        Version 0.01<br>
+        © 2026. All rights reserved.<br>
+        Made in SF. With love.
+      </div>
+    </div>
+    <div class="foot-grid">
+      <div>
+        <h2 class="h2" style="max-width:14ch;">Merge by structure.</h2>
+      </div>
+      <div class="foot-links">
+        <a href="#thesis">Why</a>
+        <a href="#how">How it works</a>
+        <a href="#compare">Comparison</a>
+        <a href="#faq">FAQ</a>
+        <a href="https://github.com" target="_blank" rel="noopener">GitHub ↗</a>
+      </div>
+      <p class="colophon">
+        Weave grew out of research into AST databases — Unison, Intentional Programming, and
+        JetBrains MPS — reimagined as version control for a world where most of the commits are
+        written by agents.
+      </p>
+    </div>
+  </div>
+</footer>
+
+<script>
+  (function () {
+    /* ---- theme toggle ---- */
+    var btn = document.getElementById('themeToggle');
+    var root = document.documentElement;
+    btn.addEventListener('click', function () {
+      var current = root.getAttribute('data-theme');
+      if (!current) current = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      root.setAttribute('data-theme', current === 'dark' ? 'light' : 'dark');
+    });
+
+    /* ---- interactive merge demo ---- */
+    var reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    var runBtn = document.getElementById('demoRun');
+    var statusEl = document.getElementById('demoStatus');
+    var ops = document.querySelectorAll('#demo .op');
+    var pips = [0,1,2,3].map(function(i){ return document.getElementById('p'+i); });
+
+    function op(name){ return document.querySelector('#demo .op[data-op="'+name+'"]'); }
+    function classify(el, cls){ el.classList.remove('ok','conflict','resolved'); if(cls) el.classList.add(cls); }
+
+    /* timeline: [delayMs, fn] */
+    var timeline = [
+      [0,    function(){ ['a1','a2','a3'].forEach(function(n){ op(n).classList.add('show'); }); pip(0);
+                        say('<b>feature-1</b> commits 3 structural ops to its worktree.'); }],
+      [900,  function(){ ['b1','b2','b3'].forEach(function(n){ op(n).classList.add('show'); }); pip(1);
+                        say('<b>feature-2</b> commits 3 ops in parallel — both touch <code>total_price</code>.'); }],
+      [900,  function(){ var m1=op('m1'), m2=op('m2'); m1.classList.add('show'); m2.classList.add('show');
+                        classify(m1,'ok'); classify(m2,'ok'); pip(2);
+                        say('Merging onto main… <b>5 of 6 ops touch different nodes → auto-merged.</b>'); }],
+      [1100, function(){ var m3=op('m3'); m3.classList.add('show'); classify(m3,'conflict');
+                        say('One collision: both edited node <code>#total_price.body</code>. Conflict scoped to <b>a single node</b>.'); }],
+      [1200, function(){ var m4=op('m4'); m4.classList.add('show'); classify(m4,'resolved'); pip(3);
+                        say('<b>resolve_merge</b>: an LLM writes code combining both intents. Merge complete — no human rebase.'); }]
+    ];
+
+    function pip(i){ pips.forEach(function(p,idx){ p.classList.toggle('on', idx<=i); }); }
+    function say(html){ statusEl.innerHTML = html; }
+    function reset(){
+      ops.forEach(function(o){ o.classList.remove('show','ok','conflict','resolved'); });
+      pips.forEach(function(p){ p.classList.remove('on'); });
+    }
+
+    var timers = [];
+    function play(){
+      timers.forEach(clearTimeout); timers = []; reset();
+      runBtn.disabled = true; runBtn.textContent = '● Merging…';
+      var t = 0;
+      timeline.forEach(function(step){
+        t += step[0];
+        timers.push(setTimeout(step[1], t));
+      });
+      timers.push(setTimeout(function(){ runBtn.disabled = false; runBtn.textContent = '↻ Replay'; }, t + 400));
+    }
+
+    if (reduce) {
+      /* show the finished state, no animation */
+      ops.forEach(function(o){ o.classList.add('show'); });
+      classify(op('m1'),'ok'); classify(op('m2'),'ok'); classify(op('m3'),'conflict'); classify(op('m4'),'resolved');
+      pip(3);
+      say('5 of 6 ops auto-merged; 1 same-node conflict resolved by an LLM. No manual rebase.');
+      runBtn.textContent = '↻ Replay';
+    }
+    runBtn.addEventListener('click', play);
+  })();
+</script>
+</body>
+</html>
