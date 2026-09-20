@@ -3,10 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="Weave — AST-native version control that merges code by structure, not text. Parallel coding agents, a speculative merge queue, no merge conflicts.">
+<meta name="description" content="Weave — version control for code stored as a syntax tree in SQLite. Structural merges and a speculative merge queue for parallel coding agents.">
 </head>
 <body>
-<title>Weave — Version Control That Merges Meaning, Not Text</title>
+<title>Weave — version control for code stored as a syntax tree</title>
 
 <style>
   :root {
@@ -33,10 +33,10 @@
     --sans: "Helvetica Neue", "Helvetica", "Arial", "Liberation Sans", system-ui, sans-serif;
 
     /* fluid type scale */
-    --fs-mega:  clamp(3.4rem, 12vw, 10rem);
-    --fs-h1:    clamp(2.4rem, 7vw, 6rem);
-    --fs-h2:    clamp(1.9rem, 4.6vw, 3.6rem);
-    --fs-lead:  clamp(1.15rem, 1.7vw, 1.55rem);
+    --fs-mega:  clamp(2.3rem, 6vw, 4.2rem);
+    --fs-h1:    clamp(1.9rem, 4.2vw, 3rem);
+    --fs-h2:    clamp(1.5rem, 3.2vw, 2.3rem);
+    --fs-lead:  clamp(1.1rem, 1.5vw, 1.4rem);
     --fs-body:  clamp(1rem, 1.25vw, 1.18rem);
     --fs-mono:  clamp(0.68rem, 0.85vw, 0.8rem);
   }
@@ -380,7 +380,7 @@
     Weave
   </div>
   <nav class="nav-links">
-    <a href="#thesis" class="hide-sm">Why</a>
+    <a href="#thesis" class="hide-sm">vs. git</a>
     <a href="#how" class="hide-sm">How it works</a>
     <a href="#queue" class="hide-sm">Merge queue</a>
     <a href="#compare">Comparison</a>
@@ -395,11 +395,11 @@
   <div class="wrap hero-grid">
     <div>
       <p class="eyebrow">AST-native version control · v0.01</p>
-      <h1 class="h1">Ten agents.<br>One codebase.<br>No merge conflicts.</h1>
+      <h1 class="h1">Version control for code stored as a syntax tree</h1>
       <p class="lead" style="margin-top:24px;">
-        Weave stores your code as a <strong>syntax tree in a database</strong> — not as lines in
-        files. Commits, branches, and merges happen on the tree itself, so the parallel edits
-        git would call a conflict simply&nbsp;don't.
+        Weave keeps your code as a syntax tree in a SQLite database instead of as lines in files.
+        Commits, branches, and merges operate on the tree, so edits to different parts of a file
+        don't conflict the way they do in git.
       </p>
       <div class="hero-cta">
         <a class="btn" href="#how">Read how it works</a>
@@ -446,37 +446,37 @@
 <!-- ===================== THESIS ===================== -->
 <section class="framed" id="thesis">
   <div class="wrap">
-    <p class="eyebrow">The core idea</p>
-    <h2 class="mega">Git merges<br>text. Weave<br>merges meaning.</h2>
+    <p class="eyebrow">How it differs from git</p>
+    <h2 class="h1">Merges happen on the syntax tree, not on lines of text.</h2>
 
     <div class="cols">
       <div class="col">
-        <p class="eyebrow">Why git fights you</p>
+        <p class="eyebrow">In git</p>
         <p>
-          Git sees a source file as a stack of <strong>lines of text</strong>. When two branches
-          change the same file — even in completely different functions — git compares line ranges
-          and raises a conflict the moment those ranges touch or sit adjacent. It has no idea what
-          the code <em>means</em>; it only knows lines <code>40–52</code> moved on both sides.
+          Git treats a source file as a sequence of <strong>lines of text</strong>. When two
+          branches change the same file — even in different functions — git compares line ranges and
+          reports a conflict when those ranges overlap or sit adjacent. It works on line positions,
+          not on the structure of the code.
         </p>
         <p>
-          Point a swarm of coding agents at one repo and this becomes the bottleneck. Agents
-          generate large, overlapping edits fast, and you spend more time refereeing rebases and
-          untangling conflict markers than shipping features.
+          With several coding agents working in one repo at once, this comes up often. They produce
+          large, overlapping edits, and much of the time goes into resolving conflicts that aren't
+          actual disagreements about the code.
         </p>
       </div>
       <div class="col">
-        <p class="eyebrow">What Weave does instead</p>
+        <p class="eyebrow">In Weave</p>
         <p>
-          Weave never stores lines. It parses your code into an <strong>abstract syntax tree</strong>
-          and keeps it in SQLite, where every node has a stable id. A change isn't a text diff —
-          it's a <strong>structural operation</strong> on a node: <em>replace this expression,
-          insert this function, delete this branch.</em>
+          Weave parses your code into an <strong>abstract syntax tree</strong> and stores it in
+          SQLite, where every node has a stable id. A change is a <strong>structural operation</strong>
+          on a node — replace an expression, insert a function, delete a branch — rather than a text
+          diff.
         </p>
         <p>
-          Two edits only conflict if they touch the <strong>same node</strong>. Different functions
-          are different nodes, so they merge automatically — no overlap math, no whitespace wars.
-          A real conflict shrinks from &ldquo;this whole file&rdquo; to &ldquo;this one
-          expression.&rdquo;
+          Two edits conflict only if they touch the <strong>same node</strong>. Different functions
+          are different nodes, so they merge automatically, and adjacent lines or formatting don't
+          cause conflicts. When there is a real conflict, it's scoped to the single node both sides
+          changed.
         </p>
       </div>
     </div>
@@ -541,37 +541,35 @@
 <!-- ===================== MERGE QUEUE ===================== -->
 <section class="framed" id="queue">
   <div class="wrap">
-    <p class="eyebrow">The merge queue</p>
-    <h2 class="h1">Everyone commits to main.<br>Main stays green.</h2>
+    <p class="eyebrow">Merge queue</p>
+    <h2 class="h1">Commits land through a speculative merge queue</h2>
     <p class="lead" style="margin-top:20px;">
-      Structural merges stop agents from colliding on <em>code</em>. The merge queue stops them
-      from colliding on <em>CI</em> — so a swarm can commit straight to <code>main</code> at once
-      without a lock, without a broken build, and without waiting in line.
+      Structural merging avoids conflicts in the code. A merge queue avoids conflicts in CI: agents
+      can commit to <code>main</code> concurrently, and main only advances through revisions that
+      pass the test suite.
     </p>
 
     <div class="cols">
       <div class="col">
-        <p class="eyebrow">Not a lock-the-world gate</p>
+        <p class="eyebrow">Verification runs outside the lock</p>
         <p>
-          Old CI serializes: each commit locks main, runs the whole suite, then unlocks. Ten
-          agents means ten suites back-to-back. Weave's <code>commit_to_main</code> is a
+          Conventional CI serializes: each commit locks main, runs the whole suite, then unlocks —
+          so ten agents mean ten suites back to back. Weave's <code>commit_to_main</code> is a
           <strong>speculative queue</strong> (bors / GitHub-merge-queue style). Enqueuing takes a
-          millisecond write-lock — just enough to run conflict checks and assign node ids — then
-          releases. <strong>Verification runs outside the lock</strong>, concurrently, against your
-          <em>predicted</em> landing state: the current head plus every transaction queued ahead of
-          you plus your own ops.
+          millisecond write-lock — enough to run conflict checks and assign node ids — then releases.
+          Verification then runs concurrently, against the <em>predicted</em> landing state: the
+          current head, plus every transaction queued ahead of you, plus your own ops.
         </p>
       </div>
       <div class="col">
-        <p class="eyebrow">Green by construction</p>
+        <p class="eyebrow">Main only advances through green states</p>
         <p>
           Landing is a hash check. If the state you verified is byte-identical to the real landing
-          state, it lands <strong>instantly, with no re-run</strong>. If a commit ahead of you was
-          evicted, your hash no longer matches and you re-verify against the corrected state. Main
-          only ever advances through verified states, in ticket order — so
-          <strong>every revision on main is green</strong>. A failing commit is evicted and bounced
-          back to its author as a structured event; the commits behind it simply re-check and keep
-          moving.
+          state, it lands immediately with no re-run. If a commit ahead of you was evicted, your
+          hash no longer matches and you re-verify against the corrected state. Main advances only
+          through verified states, in ticket order, so every revision on main passes the suite. A
+          failing commit is evicted and returned to its author; the commits behind it re-check and
+          continue.
         </p>
       </div>
     </div>
@@ -626,7 +624,7 @@
         <div class="mq-result">
           <div class="mq-stat"><b>~0.6s</b><span>3 disjoint commits land · serial gating ≥ 1.8s</span></div>
           <div class="mq-stat"><b>0.01s</b><span>re-verify when the slow test is untouched*</span></div>
-          <div class="mq-stat"><b>100%</b><span>of main revisions green, by construction</span></div>
+          <div class="mq-stat"><b>100%</b><span>of landed revisions pass the suite</span></div>
         </div>
       </div>
     </div>
@@ -644,8 +642,8 @@
   <div class="wrap">
     <div class="demo-head">
       <div>
-        <p class="eyebrow">Watch a merge happen</p>
-        <h2 class="h1">Two agents. One function.<br>Zero manual conflict.</h2>
+        <p class="eyebrow">Demo</p>
+        <h2 class="h1">Merging two overlapping edits</h2>
       </div>
       <div class="demo-controls">
         <div class="demo-progress" aria-hidden="true">
@@ -690,12 +688,12 @@
 <!-- ===================== STAT ===================== -->
 <section class="framed stat">
   <div class="wrap">
-    <p class="eyebrow">The payoff</p>
-    <h2 class="mega"><span class="strike">The whole file</span> →&nbsp;one&nbsp;node.</h2>
-    <p class="foot" style="margin-top:22px;max-width:52ch;line-height:1.7;">
-      That's the size of a Weave conflict. Instead of a human rebasing an entire file, the merge
-      surface is a single expression — cheap enough to resolve automatically. Most parallel edits
-      never conflict at all.
+    <p class="eyebrow">Conflict size</p>
+    <h2 class="h2">Conflicts are scoped to a single node.</h2>
+    <p style="margin-top:18px;max-width:60ch;">
+      When two edits do touch the same node, Weave reports just that node — the base, main, and
+      worktree versions — instead of a file full of conflict markers. That's small enough to hand to
+      an LLM to resolve, and edits to different nodes don't conflict in the first place.
     </p>
   </div>
 </section>
@@ -703,11 +701,11 @@
 <!-- ===================== COMPARISON ===================== -->
 <section class="framed" id="compare">
   <div class="wrap">
-    <p class="eyebrow">Where Weave fits</p>
-    <h2 class="h1">Familiar enough to adopt.<br>Different where it counts.</h2>
+    <p class="eyebrow">Comparison</p>
+    <h2 class="h1">How Weave relates to existing tools</h2>
     <p class="lead" style="margin-top:20px;">
-      Weave isn't trying to reinvent your mental model — you still branch, commit, and merge.
-      Here's exactly how it lines up against the tools you already know.
+      You still branch, commit, and merge. Here's where Weave overlaps with tools you already use,
+      and where it differs.
     </p>
 
     <div class="cmp-grid">
@@ -716,9 +714,9 @@
         <div class="win__bar"><span class="win__dots"><i></i></span><span class="win__title">Weave vs. Git</span></div>
         <div class="win__body">
           <dl>
-            <div class="same"><dt>Shared DNA</dt><dd>Commits, branches, merges, a reviewable history, and an explicit merge step you control. The workflow feels like git.</dd></div>
+            <div class="same"><dt>In common</dt><dd>Commits, branches, merges, a reviewable history, and an explicit merge step you control. The workflow feels like git.</dd></div>
             <hr class="rule">
-            <div class="diff"><dt>What Weave changes</dt><dd>Git diffs and merges <strong>lines of text</strong>; Weave diffs and merges <strong>AST nodes</strong>. No line-level or adjacent-line conflicts, and your working copy is a database, not a checkout you have to keep clean.</dd></div>
+            <div class="diff"><dt>How Weave differs</dt><dd>Git diffs and merges <strong>lines of text</strong>; Weave diffs and merges <strong>AST nodes</strong>. No line-level or adjacent-line conflicts, and your working copy is a database, not a checkout you have to keep clean.</dd></div>
           </dl>
         </div>
       </div>
@@ -727,9 +725,9 @@
         <div class="win__bar"><span class="win__dots"><i></i></span><span class="win__title">Weave vs. GitHub / Pull Requests</span></div>
         <div class="win__body">
           <dl>
-            <div class="same"><dt>Shared DNA</dt><dd>Isolate work, propose a change set, and review before it lands on the main line.</dd></div>
+            <div class="same"><dt>In common</dt><dd>Isolate work, propose a change set, and review before it lands on the main line.</dd></div>
             <hr class="rule">
-            <div class="diff"><dt>What Weave changes</dt><dd>A PR still resolves at the <strong>textual diff</strong>. Weave's unit of review is a structural op set; conflicts arrive <strong>pre-scoped to nodes</strong> and can be auto-resolved by an LLM instead of a human rebasing a branch.</dd></div>
+            <div class="diff"><dt>How Weave differs</dt><dd>A PR still resolves at the <strong>textual diff</strong>. Weave's unit of review is a structural op set; conflicts arrive <strong>pre-scoped to nodes</strong> and can be auto-resolved by an LLM instead of a human rebasing a branch.</dd></div>
           </dl>
         </div>
       </div>
@@ -738,9 +736,9 @@
         <div class="win__bar"><span class="win__dots"><i></i></span><span class="win__title">Weave vs. Unison / content-addressed code</span></div>
         <div class="win__body">
           <dl>
-            <div class="same"><dt>Shared DNA</dt><dd>The conviction that code should be stored as <strong>structured, identity-bearing definitions</strong> — not as files of text.</dd></div>
+            <div class="same"><dt>In common</dt><dd>The conviction that code should be stored as <strong>structured, identity-bearing definitions</strong> — not as files of text.</dd></div>
             <hr class="rule">
-            <div class="diff"><dt>What Weave changes</dt><dd>Unison is a whole <strong>language</strong> you adopt. Weave is a <strong>VCS layer</strong> you point at ordinary code, with git-style worktrees, commits, and merges — plus an MCP interface built for agents.</dd></div>
+            <div class="diff"><dt>How Weave differs</dt><dd>Unison is a whole <strong>language</strong> you adopt. Weave is a <strong>VCS layer</strong> you point at ordinary code, with git-style worktrees, commits, and merges — plus an MCP interface built for agents.</dd></div>
           </dl>
         </div>
       </div>
@@ -749,9 +747,9 @@
         <div class="win__bar"><span class="win__dots"><i></i></span><span class="win__title">Weave vs. CRDT live editors (Docs, multiplayer IDEs)</span></div>
         <div class="win__body">
           <dl>
-            <div class="same"><dt>Shared DNA</dt><dd>Many writers on one document, combined by <strong>operations</strong> rather than manual conflict resolution.</dd></div>
+            <div class="same"><dt>In common</dt><dd>Many writers on one document, combined by <strong>operations</strong> rather than manual conflict resolution.</dd></div>
             <hr class="rule">
-            <div class="diff"><dt>What Weave changes</dt><dd>Character-level CRDTs converge <em>always</em> — and can silently interleave two edits into broken syntax. Weave's ops are <strong>AST-aware</strong>, so a merge is always valid code; a genuine clash surfaces as an explicit conflict instead of corrupt text.</dd></div>
+            <div class="diff"><dt>How Weave differs</dt><dd>Character-level CRDTs converge <em>always</em> — and can silently interleave two edits into broken syntax. Weave's ops are <strong>AST-aware</strong>, so a merge is always valid code; a genuine clash surfaces as an explicit conflict instead of corrupt text.</dd></div>
           </dl>
         </div>
       </div>
@@ -760,8 +758,8 @@
         <div class="win__bar"><span class="win__dots"><i></i></span><span class="win__title">Weave vs. semantic-merge tools (SemanticMerge, difftastic)</span></div>
         <div class="win__body">
           <dl style="grid-template-columns:1fr 1fr;display:grid;gap:14px 40px;">
-            <div class="same"><dt>Shared DNA</dt><dd>They parse code into a tree to merge and diff more intelligently than plain line comparison.</dd></div>
-            <div class="diff"><dt>What Weave changes</dt><dd>Those tools bolt structural awareness <em>onto</em> a file- and line-based git. Weave is structural <strong>all the way down</strong> — the tree <em>is</em> the store, so there are no files to reconcile in the first place.</dd></div>
+            <div class="same"><dt>In common</dt><dd>They parse code into a tree to merge and diff more intelligently than plain line comparison.</dd></div>
+            <div class="diff"><dt>How Weave differs</dt><dd>Those tools bolt structural awareness <em>onto</em> a file- and line-based git. Weave is structural <strong>all the way down</strong> — the tree <em>is</em> the store, so there are no files to reconcile in the first place.</dd></div>
           </dl>
         </div>
       </div>
@@ -773,8 +771,8 @@
 <!-- ===================== FAQ ===================== -->
 <section class="framed" id="faq">
   <div class="wrap">
-    <p class="eyebrow">Questions</p>
-    <h2 class="h1">The honest FAQ.</h2>
+    <p class="eyebrow">FAQ</p>
+    <h2 class="h1">Common questions</h2>
 
     <div class="faq">
       <details>
@@ -835,7 +833,7 @@
     </div>
     <div class="foot-grid">
       <div>
-        <h2 class="h2" style="max-width:14ch;">Merge by structure.</h2>
+        <h2 class="h2" style="max-width:18ch;">Merge by structure, not by text.</h2>
       </div>
       <div class="foot-links">
         <a href="#thesis">Why</a>
@@ -845,9 +843,8 @@
         <a href="https://github.com/montaguegabe/weave" target="_blank" rel="noopener">GitHub ↗</a>
       </div>
       <p class="colophon">
-        Weave grew out of research into AST databases — Unison, Intentional Programming, and
-        JetBrains MPS — reimagined as version control for a world where most of the commits are
-        written by agents.
+        Weave draws on prior work on AST databases — Unison, Intentional Programming, and JetBrains
+        MPS — applied to version control for parallel coding agents.
       </p>
     </div>
   </div>
