@@ -47,7 +47,7 @@ def show_queue(v):
         )
 
 
-def watch(v):
+def watch(v, show_source=True):
     import time
 
     try:
@@ -60,6 +60,13 @@ def watch(v):
             show_queue(v)
             print("\n-- history --")
             show_log(v)
+            if show_source:
+                print("\n-- main (rendered projection) --")
+                lines = v.tree("main").render().splitlines()
+                for line in lines[:48]:
+                    print(f"  {line}")
+                if len(lines) > 48:
+                    print(f"  … {len(lines) - 48} more lines (astctl.py render)")
             sys.stdout.flush()
             time.sleep(1)
     except KeyboardInterrupt:

@@ -28,6 +28,24 @@ Have two more terminals ready for the agents.
 
 ---
 
+## Act 0 (optional) — Why git fails at this (~30 seconds)
+
+For an audience that needs the problem before the solution:
+
+```bash
+python3 demo.py
+```
+
+Fully scripted and deterministic: two agents edit **adjacent lines** of the
+same function; git produces `<<<<<<<` conflict markers on the text, then the
+AST store merges the identical edits cleanly and executes the result. Point at
+the conflict markers:
+
+> "These two changes don't actually conflict — they touch different statements.
+> Git can't see that, because git merges characters, not programs. Everything
+> that follows is what happens when the program itself is the thing under
+> version control."
+
 ## Act 1 — There is no file (~45 seconds)
 
 ```bash
@@ -66,6 +84,17 @@ Two terminals (or `./demo.sh` to spawn both):
 
 Both tasks touch `total_price` **on purpose**.
 
+**Variant B — deterministic race** (recommended for a live audience; the
+natural version is a coin flip because agents plan for 30–90s but commit in
+~1s, so they often serialize). Append this to BOTH task prompts:
+
+> "Read main and prepare your ops, then tell me you are ready and WAIT for my
+> confirmation before calling commit_to_main."
+
+When both agents report ready, type `commit` into both TUIs within a second of
+each other. Both built their ops against the same base revision, so one lands
+and the other is guaranteed to get a `conflict` bounce — and adapt, on camera.
+
 > "Each agent is a stock Claude Code session with every built-in tool removed —
 > no filesystem, no shell. Its entire world is eleven MCP tools over the
 > database. And notice what's missing: there is no merge agent, no coordinator.
@@ -76,9 +105,13 @@ Both tasks touch `total_price` **on purpose**.
 ## Act 3 — What to point at while they run (~2–3 minutes)
 
 **In the watcher:**
-- Tickets appearing in the queue; `landed` vs `evicted` states.
+- Tickets appearing in the queue: `landed`, `evicted` (queued but failed
+  verification), and `rejected` (conflict caught at submission — the message
+  shows the reason, e.g. `[conflict vs landed revision]`).
 - The revision log growing — every entry landed only after the full suite
   passed on the exact state that landed.
+- Main's rendered source at the bottom of the dashboard, morphing live as
+  transactions land.
 
 **In the agents' TUIs:**
 - The **losing** agent's `conflict` or `verification_failed` result: it names
