@@ -563,9 +563,25 @@ class VCS:
         self.db.execute("BEGIN IMMEDIATE")
         try:
             head = self._head("main")
+
+            def record_rejection(reason: str):
+                # leave an observable trace of the collision in the queue
+                self.db.execute(
+                    "INSERT INTO queue (author, message, ops, state, base_head, created_at) "
+                    "VALUES (?, ?, ?, 'rejected', ?, ?)",
+                    (
+                        author,
+                        f"{message} [{reason}]",
+                        json.dumps(raw_ops),
+                        head,
+                        time.time(),
+                    ),
+                )
+                self.db.commit()
+
             conflict = self._landed_conflicts(raw_ops, base_rev, head)
             if conflict:
-                self.db.rollback()
+                record_rejection("conflict vs landed revision")
                 return conflict
             mine = {op.get("target") for op in raw_ops if op.get("action") in MODIFYING}
             pending = self.db.execute(
@@ -579,7 +595,7 @@ class VCS:
                 }
                 overlap = sorted(mine & theirs)
                 if overlap:
-                    self.db.rollback()
+                    record_rejection(f"conflict vs queued ticket #{t}")
                     return {
                         "status": "conflict",
                         "conflicts": [

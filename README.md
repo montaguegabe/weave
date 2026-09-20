@@ -31,6 +31,7 @@ silent default; conflict is a structured event handled by whoever caused it.
 Watch from another terminal:
 
 ```
+python3 astctl.py watch      # live dashboard: worktrees + queue + history
 python3 astctl.py status | render | outline | log | queue
 ```
 

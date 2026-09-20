@@ -26,6 +26,7 @@ echo "  feature-2  — $TASK2"
 echo
 echo "Both tasks touch total_price, so expect one agent to hit a conflict or"
 echo "verification failure and adapt. Watch from here with:"
+echo "  python3 astctl.py watch      # live dashboard"
 echo "  python3 astctl.py status | render | outline | log | queue"
 echo
 echo "If a pending worktree ever gets orphaned: ./launch-agent.sh resolver"

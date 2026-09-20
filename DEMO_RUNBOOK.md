@@ -18,10 +18,10 @@ cd ~/Projects/hacks/no-merge-conflicts
 python3 init_db.py --fresh
 ```
 
-Open a **watcher terminal**:
+Open a **watcher terminal** (a built-in live dashboard — macOS has no `watch`):
 
 ```bash
-watch -n1 "python3 astctl.py queue; echo; python3 astctl.py log"
+python3 astctl.py watch      # refreshes every second: worktrees + queue + history; ctrl-C to exit
 ```
 
 Have two more terminals ready for the agents.
