@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="Weave — AST-native version control that merges code by structure, not text. Parallel coding agents, no merge conflicts.">
+<meta name="description" content="Weave — AST-native version control that merges code by structure, not text. Parallel coding agents, a speculative merge queue, no merge conflicts.">
 </head>
 <body>
 <title>Weave — Version Control That Merges Meaning, Not Text</title>
@@ -22,6 +22,9 @@
     --hair:        #201c34b0;
     --btn-bg:      #201c34;
     --btn-txt:     #f0eeff;
+    --ok:          #1a7f4b;
+    --bad:         #c0392b;
+    --track:       #e0ddf4;
 
     --maxw: 1240px;
     --gutter: clamp(20px, 5vw, 72px);
@@ -51,6 +54,9 @@
       --hair:        #e9e5ff8a;
       --btn-bg:      #ece9fb;
       --btn-txt:     #14112a;
+      --ok:          #5fcf94;
+      --bad:         #ff7b6b;
+      --track:       #2a2550;
     }
   }
   /* explicit toggle wins in both directions */
@@ -58,11 +64,13 @@
     --ground:#a6a1ef; --ground-2:#211d3a5e; --on-ground:#201c34; --win-fill:#ffffff;
     --win-fill-alt:#c8c5df; --win-ink:#201c34; --win-bar-txt:#f3f1ff; --dot:#201c34;
     --hair:#201c34b0; --btn-bg:#201c34; --btn-txt:#f0eeff;
+    --ok:#1a7f4b; --bad:#c0392b; --track:#e0ddf4;
   }
   :root[data-theme="dark"] {
     --ground:#191630; --ground-2:#e7e3ff1a; --on-ground:#e9e5ff; --win-fill:#ece9fb;
     --win-fill-alt:#aaa4c8; --win-ink:#14112a; --win-bar-txt:#ece9fb; --dot:#e9e5ff;
     --hair:#e9e5ff8a; --btn-bg:#ece9fb; --btn-txt:#14112a;
+    --ok:#5fcf94; --bad:#ff7b6b; --track:#2a2550;
   }
 
   * { box-sizing: border-box; }
@@ -255,6 +263,62 @@
   .demo-progress i { width:26px; height:5px; background:var(--hair); display:block; }
   .demo-progress i.on { background:var(--on-ground); }
 
+  /* ---------- merge-queue swimlane diagram ---------- */
+  .mq-legend { display:flex; flex-wrap:wrap; gap:18px; font-family:var(--mono); font-size:0.68rem; letter-spacing:0.04em; margin-bottom:20px; }
+  .mq-legend span { display:inline-flex; align-items:center; gap:7px; }
+  .mq-swatch { width:13px; height:13px; display:inline-block; flex:none; }
+  .mq-swatch.ok  { background:var(--ok); }
+  .mq-swatch.bad { background:var(--bad); }
+  .mq-swatch.lock{ width:5px; height:15px; background:var(--win-ink); }
+
+  .mq-phases, .mq-grid {
+    display:grid;
+    grid-template-columns: 116px 22px minmax(160px,1fr) 132px;
+    gap:11px 12px; align-items:center;
+  }
+  .mq-phases { margin-bottom:12px; }
+  .mq-phase { font-family:var(--mono); font-size:0.6rem; letter-spacing:0.11em; text-transform:uppercase; opacity:0.6; }
+  .mq-phase.enq { grid-column:1 / 3; }
+  .mq-phase.ver { grid-column:3 / 4; }
+  .mq-phase.lnd { grid-column:4 / 5; }
+
+  .mq-lane-label { font-family:var(--mono); font-size:0.72rem; white-space:nowrap; }
+  .mq-lock { width:6px; height:16px; background:var(--win-ink); justify-self:center; }
+  .mq-track { position:relative; height:16px; background:var(--track); border:1px solid color-mix(in srgb, var(--win-ink) 22%, transparent); overflow:hidden; }
+  .mq-fill {
+    position:absolute; top:0; left:0; bottom:0; width:var(--w,60%);
+    transform-origin:left; animation: mqgrow var(--dur,2s) cubic-bezier(.4,0,.2,1) both;
+  }
+  .mq-fill.ok  { background:color-mix(in srgb, var(--ok) 22%, var(--win-fill));  border-right:2px solid var(--ok); }
+  .mq-fill.bad { background:color-mix(in srgb, var(--bad) 22%, var(--win-fill)); border-right:2px solid var(--bad); }
+  .mq-mark { position:absolute; right:5px; top:50%; transform:translateY(-50%); font-family:var(--mono); font-size:0.72rem; font-weight:700; }
+  .mq-mark.ok  { color:var(--ok); }
+  .mq-mark.bad { color:var(--bad); }
+  @keyframes mqgrow { from { transform:scaleX(0); } to { transform:scaleX(1); } }
+
+  .mq-land { font-family:var(--mono); font-size:0.72rem; display:flex; align-items:center; gap:7px; }
+  .mq-land.ok  { color:var(--ok); }
+  .mq-land.bad { color:var(--bad); }
+  .mq-dot { width:9px; height:9px; border-radius:50%; flex:none; }
+  .mq-land.ok  .mq-dot { background:var(--ok); }
+
+  .mq-trunk { display:flex; align-items:center; flex-wrap:wrap; gap:0 4px; margin-top:16px; border-top:1.5px solid var(--hair); padding-top:16px; font-family:var(--mono); font-size:0.72rem; }
+  .mq-trunk-label { margin-right:12px; opacity:0.8; }
+  .mq-node { color:var(--ok); display:inline-flex; align-items:center; gap:5px; }
+  .mq-node::before { content:""; width:8px; height:8px; border-radius:50%; background:var(--ok); display:inline-block; }
+  .mq-edge { width:26px; height:2px; background:var(--ok); opacity:0.55; }
+  .mq-trunk-note { margin-left:14px; opacity:0.6; }
+
+  .mq-result { margin-top:26px; display:flex; flex-wrap:wrap; gap:10px 30px; }
+  .mq-stat { }
+  .mq-stat b { font-family:var(--sans); font-weight:800; font-size:clamp(1.6rem,3vw,2.4rem); letter-spacing:-0.02em; display:block; line-height:1; }
+  .mq-stat span { font-family:var(--mono); font-size:0.66rem; letter-spacing:0.08em; text-transform:uppercase; opacity:0.7; }
+
+  @media (max-width:560px){
+    .mq-phases, .mq-grid { grid-template-columns: 84px 16px minmax(90px,1fr) 96px; gap:9px 7px; }
+    .mq-lane-label, .mq-land { font-size:0.62rem; }
+  }
+
   /* ---------- big stat ---------- */
   .stat { text-align: left; }
   .stat .mega { margin-bottom: 10px; }
@@ -318,6 +382,7 @@
   <nav class="nav-links">
     <a href="#thesis" class="hide-sm">Why</a>
     <a href="#how" class="hide-sm">How it works</a>
+    <a href="#queue" class="hide-sm">Merge queue</a>
     <a href="#compare">Comparison</a>
     <a href="#faq" class="hide-sm">FAQ</a>
     <a href="https://github.com/montaguegabe/weave" target="_blank" rel="noopener">GitHub ↗</a>
@@ -470,6 +535,107 @@
         </div>
       </div>
     </div>
+  </div>
+</section>
+
+<!-- ===================== MERGE QUEUE ===================== -->
+<section class="framed" id="queue">
+  <div class="wrap">
+    <p class="eyebrow">The merge queue</p>
+    <h2 class="h1">Everyone commits to main.<br>Main stays green.</h2>
+    <p class="lead" style="margin-top:20px;">
+      Structural merges stop agents from colliding on <em>code</em>. The merge queue stops them
+      from colliding on <em>CI</em> — so a swarm can commit straight to <code>main</code> at once
+      without a lock, without a broken build, and without waiting in line.
+    </p>
+
+    <div class="cols">
+      <div class="col">
+        <p class="eyebrow">Not a lock-the-world gate</p>
+        <p>
+          Old CI serializes: each commit locks main, runs the whole suite, then unlocks. Ten
+          agents means ten suites back-to-back. Weave's <code>commit_to_main</code> is a
+          <strong>speculative queue</strong> (bors / GitHub-merge-queue style). Enqueuing takes a
+          millisecond write-lock — just enough to run conflict checks and assign node ids — then
+          releases. <strong>Verification runs outside the lock</strong>, concurrently, against your
+          <em>predicted</em> landing state: the current head plus every transaction queued ahead of
+          you plus your own ops.
+        </p>
+      </div>
+      <div class="col">
+        <p class="eyebrow">Green by construction</p>
+        <p>
+          Landing is a hash check. If the state you verified is byte-identical to the real landing
+          state, it lands <strong>instantly, with no re-run</strong>. If a commit ahead of you was
+          evicted, your hash no longer matches and you re-verify against the corrected state. Main
+          only ever advances through verified states, in ticket order — so
+          <strong>every revision on main is green</strong>. A failing commit is evicted and bounced
+          back to its author as a structured event; the commits behind it simply re-check and keep
+          moving.
+        </p>
+      </div>
+    </div>
+
+    <div class="win" style="margin-top:clamp(36px,5vw,56px);">
+      <div class="win__bar"><span class="win__dots"><i></i><i></i></span><span class="win__title">commit_to_main — speculative merge queue</span></div>
+      <div class="win__body" style="font-family:var(--sans);">
+        <div class="mq-legend">
+          <span><i class="mq-swatch lock"></i> ms write-lock (conflict check)</span>
+          <span><i class="mq-swatch ok"></i> verifying / verified</span>
+          <span><i class="mq-swatch bad"></i> evicted → re-run</span>
+        </div>
+
+        <div class="mq-phases" aria-hidden="true">
+          <div class="mq-phase enq">Enqueue · locked</div>
+          <div class="mq-phase ver">Verify · in parallel, outside the lock</div>
+          <div class="mq-phase lnd">Land · in ticket order</div>
+        </div>
+
+        <div class="mq-grid">
+          <!-- lane 1 -->
+          <div class="mq-lane-label">#1 feat-A</div>
+          <div class="mq-lock"></div>
+          <div class="mq-track"><div class="mq-fill ok" style="--w:70%;--dur:1.8s"><span class="mq-mark ok">✓</span></div></div>
+          <div class="mq-land ok"><span class="mq-dot"></span>lands → r1</div>
+          <!-- lane 2 -->
+          <div class="mq-lane-label">#2 feat-B</div>
+          <div class="mq-lock"></div>
+          <div class="mq-track"><div class="mq-fill ok" style="--w:84%;--dur:2.3s"><span class="mq-mark ok">✓</span></div></div>
+          <div class="mq-land ok"><span class="mq-dot"></span>lands → r2</div>
+          <!-- lane 3 (buggy) -->
+          <div class="mq-lane-label">#3 hotfix</div>
+          <div class="mq-lock"></div>
+          <div class="mq-track"><div class="mq-fill bad" style="--w:42%;--dur:1.2s"><span class="mq-mark bad">✗</span></div></div>
+          <div class="mq-land bad">✗ evicted → author</div>
+          <!-- lane 4 -->
+          <div class="mq-lane-label">#4 feat-D</div>
+          <div class="mq-lock"></div>
+          <div class="mq-track"><div class="mq-fill ok" style="--w:92%;--dur:2.6s"><span class="mq-mark ok">✓</span></div></div>
+          <div class="mq-land ok"><span class="mq-dot"></span>lands → r3</div>
+        </div>
+
+        <div class="mq-trunk">
+          <span class="mq-trunk-label">main</span>
+          <span class="mq-node">r0</span><span class="mq-edge"></span>
+          <span class="mq-node">r1</span><span class="mq-edge"></span>
+          <span class="mq-node">r2</span><span class="mq-edge"></span>
+          <span class="mq-node">r3</span>
+          <span class="mq-trunk-note">// #3 never touches main — every landed revision is green</span>
+        </div>
+
+        <div class="mq-result">
+          <div class="mq-stat"><b>~0.6s</b><span>3 disjoint commits land · serial gating ≥ 1.8s</span></div>
+          <div class="mq-stat"><b>0.01s</b><span>re-verify when the slow test is untouched*</span></div>
+          <div class="mq-stat"><b>100%</b><span>of main revisions green, by construction</span></div>
+        </div>
+      </div>
+    </div>
+
+    <p class="foot" style="font-family:var(--mono);font-size:var(--fs-mono);opacity:0.6;margin-top:18px;max-width:70ch;line-height:1.7;">
+      *Each test's pass is cached against the content hash of its dependency closure. A test re-runs
+      only when code it can actually observe changed, so the landing gate is usually nearly free.
+      Figures measured in <code>test_speculative.py</code>.
+    </p>
   </div>
 </section>
 
