@@ -85,6 +85,23 @@ class VcsError(Exception):
 # --------------------------------------------------------------- snippets
 
 
+def _normalize_segment(seg: str, col: int) -> str:
+    """Re-anchor a multi-line statement segment to column 0.
+
+    ast.get_source_segment slices the first line at the statement's column but
+    leaves continuation lines (e.g. the body of an `if`) at their absolute
+    indentation — which would then be re-indented on top of render depth,
+    producing over-indented projections. Strip up to `col` leading spaces from
+    each continuation line (never more than it has, so multiline strings with
+    shallower indents are left alone)."""
+    ls = seg.splitlines()
+    out = [ls[0]]
+    for ln in ls[1:]:
+        ws = len(ln) - len(ln.lstrip(" "))
+        out.append(ln[min(col, ws) :])
+    return "\n".join(out)
+
+
 def snippet_protos(code: str) -> list[dict]:
     """Parse a code snippet into a preorder list of node prototypes.
 
@@ -108,12 +125,17 @@ def snippet_protos(code: str) -> list[dict]:
                 protos.append({"parent": parent_idx, "kind": kind, "header": header})
                 walk(node.body, idx)
             else:
-                seg = ast.get_source_segment(code, node) or ast.unparse(node)
+                seg = ast.get_source_segment(code, node)
+                seg = (
+                    _normalize_segment(seg, node.col_offset)
+                    if seg
+                    else ast.unparse(node)
+                )
                 protos.append(
                     {
                         "parent": parent_idx,
                         "kind": "stmt",
-                        "header": textwrap.dedent(seg),
+                        "header": seg,
                     }
                 )
 

@@ -1,4 +1,6 @@
-# Live Demo Runbook — `no-merge-conflicts`
+# Live Demo Runbook — weave`
+
+https://weave.bighelp.ai/
 
 **The pitch:** the codebase is not files. It's an AST in SQLite. Coding agents
 commit structural transactions against node IDs through a speculative merge
@@ -161,6 +163,7 @@ python3 astctl.py queue      # the race's fossil record: landed + evicted ticket
 
 | Symptom | Fix |
 |---|---|
+| Agent says astdb tools are unavailable (only browser/ambient tools) | Its per-session MCP server failed to connect at startup. Type `/mcp` in that TUI to confirm, exit, and relaunch — `launch-agent.sh` now pre-flights the server handshake and refuses to start a toolless agent |
 | An agent idles mid-task | Type `continue` in its TUI |
 | Timing serializes; no conflict occurs | Coin flip — `python3 init_db.py --fresh` and relaunch, or show the recorded race logs (`race1.log` / `race2.log` in the session scratchpad) |
 | Agent tries something odd with ops | It gets a precise `VcsError` back and self-corrects; let it |

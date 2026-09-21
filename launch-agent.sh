@@ -71,6 +71,33 @@ Then give a short report: node-level changes, tests added, and how many retries 
   PROMPT="Your task: $TASK"
 fi
 
+# Pre-flight: the database must exist and the MCP server must answer an
+# initialize handshake BEFORE we hand it to Claude Code. If the server fails
+# to connect at session startup, Claude Code silently proceeds without it and
+# the agent ends up toolless (with only ambient tools like claude-in-chrome).
+if [[ ! -f "$DB" ]]; then
+  echo "ERROR: $DB does not exist — run: python3 $DIR/init_db.py" >&2
+  exit 1
+fi
+if ! ASTDB_PATH="$DB" python3 - "$DIR/mcp_server.py" <<'PYEOF'
+import json, os, subprocess, sys
+p = subprocess.Popen(["python3", sys.argv[1]], stdin=subprocess.PIPE,
+                     stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                     text=True, env=dict(os.environ))
+p.stdin.write(json.dumps({"jsonrpc": "2.0", "method": "initialize",
+    "params": {"protocolVersion": "preflight"}, "id": 1}) + "\n")
+p.stdin.flush()
+line = p.stdout.readline()
+p.kill()
+resp = json.loads(line)
+assert resp["result"]["serverInfo"]["name"] == "astdb", resp
+PYEOF
+then
+  echo "ERROR: astdb MCP server failed its pre-flight handshake." >&2
+  echo "Debug with: ASTDB_PATH=$DB python3 $DIR/mcp_server.py" >&2
+  exit 1
+fi
+
 # commit_to_main may block while queued transactions ahead verify/land; give
 # MCP tool calls a generous client-side timeout.
 export MCP_TOOL_TIMEOUT=600000
